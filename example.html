@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MarketIn SDK Example</title>
+    <meta name="description" content="Example implementation of MarketIn SDK">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .product {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #005a87;
+        }
+        .debug {
+            background: #f5f5f5;
+            padding: 10px;
+            border-left: 4px solid #007cba;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>MarketIn SDK Example</h1>
+    <p>This page demonstrates the MarketIn SDK functionality.</p>
+
+    <div class="debug">
+        <strong>Debug Console:</strong><br>
+        <div id="debug-output">Open browser console to see SDK logs...</div>
+    </div>
+
+    <h2>Products</h2>
+    
+    <!-- Product with MarketIn data attributes -->
+    <div class="product" 
+         data-marketin-product="premium-widget-123"
+         data-marketin-product-name="Premium Widget"
+         data-marketin-product-price="99.99"
+         data-marketin-product-category="Electronics">
+        <h3>Premium Widget - $99.99</h3>
+        <p>A high-quality widget for all your needs.</p>
+        <button onclick="trackPurchase('premium-widget-123', 99.99)">Buy Now</button>
+    </div>
+
+    <div class="product"
+         data-marketin-product="basic-widget-456"
+         data-marketin-product-name="Basic Widget"
+         data-marketin-product-price="49.99"
+         data-marketin-product-category="Electronics">
+        <h3>Basic Widget - $49.99</h3>
+        <p>A simple widget for basic needs.</p>
+        <button onclick="trackPurchase('basic-widget-456', 49.99)">Buy Now</button>
+    </div>
+
+    <h2>Subscription Plans</h2>
+    
+    <div class="product">
+        <h3>Premium Plan - $29.99/month</h3>
+        <p>All features included with premium support.</p>
+        <button onclick="trackSubscription('premium-plan', 29.99)">Subscribe</button>
+    </div>
+
+    <h2>Other Actions</h2>
+    
+    <button onclick="trackLead()">Download Free Guide (Lead)</button>
+    <button onclick="crawlPage()">Crawl Page Data</button>
+    <button onclick="showStatus()">Show SDK Status</button>
+
+    <!-- MarketIn SDK -->
+    <script src="./marketin-sdk.js"></script>
+    
+    <script>
+        // Initialize the SDK
+        MarketIn.init({
+            brandId: 'demo-brand-123',
+            debug: true // Enable debug mode for this example
+        });
+
+        // Override console.log to show in page
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const debugOutput = document.getElementById('debug-output');
+            if (debugOutput && args[0] && args[0].includes('[MarketIn SDK]')) {
+                debugOutput.innerHTML += args.join(' ') + '<br>';
+            }
+        };
+
+        // Track purchase conversion
+        function trackPurchase(productId, value) {
+            MarketIn.trackConversion({
+                eventType: 'purchase',
+                value: value,
+                currency: 'USD',
+                productId: productId,
+                conversionRef: 'order-' + Date.now(),
+                metadata: {
+                    source: 'demo-page',
+                    timestamp: new Date().toISOString()
+                }
+            });
+            alert(`Purchase tracked: ${productId} - $${value}`);
+        }
+
+        // Track subscription conversion
+        function trackSubscription(planId, value) {
+            MarketIn.trackConversion({
+                eventType: 'subscription_created',
+                value: value,
+                currency: 'USD',
+                subscriptionId: 'sub-' + Date.now(),
+                planId: planId,
+                interval: 'monthly',
+                recurringAmount: value,
+                subscriptionStatus: 'active',
+                metadata: {
+                    trial_days: 14,
+                    source: 'demo-page'
+                }
+            });
+            alert(`Subscription tracked: ${planId} - $${value}/month`);
+        }
+
+        // Track lead generation
+        function trackLead() {
+            MarketIn.trackConversion({
+                eventType: 'lead',
+                value: 0,
+                currency: 'USD',
+                conversionRef: 'lead-' + Date.now(),
+                metadata: {
+                    leadType: 'guide_download',
+                    source: 'demo-page'
+                }
+            });
+            alert('Lead conversion tracked!');
+        }
+
+        // Crawl page data
+        function crawlPage() {
+            MarketIn.crawlPageData();
+            alert('Page data crawled! Check console for details.');
+        }
+
+        // Show SDK status
+        function showStatus() {
+            const status = MarketIn.getStatus();
+            alert(`SDK Version: ${status.version}\nInitialized: ${status.initialized}\nSession ID: ${status.sessionId}`);
+        }
+
+        // Simulate affiliate link (you can add ?aid=123&cid=456 to URL to test)
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('aid') && urlParams.get('cid')) {
+            document.getElementById('debug-output').innerHTML += 
+                'Affiliate parameters detected in URL! Check console for tracking details.<br>';
+        }
+    </script>
+</body>
+</html>

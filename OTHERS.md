@@ -81,20 +81,11 @@ add_action('woocommerce_thankyou', function ($order_id) {
         return;
     }
 
-    $cartItems = array();
-    foreach ($order->get_items() as $item_id => $item) {
-        $product = $item->get_product();
-        $cartItems[] = array(
-            'productId' => $product->get_id(),
-            'price' => (float) $item->get_total(),
-            'quantity' => $item->get_quantity()
-        );
-    }
-
     $payload = array(
         'eventType' => 'purchase',
+        'value' => (float) $order->get_total(),
         'currency' => $order->get_currency(),
-        'cartItems' => $cartItems,
+        'productId' => implode('-', wp_list_pluck($order->get_items(), 'product_id')),
         'conversionRef' => 'order-' . $order_id,
         'metadata' => array(
             'orderId' => $order_id,
@@ -135,19 +126,11 @@ document.addEventListener('DOMContentLoaded', function () {
     <script>
     document.addEventListener('DOMContentLoaded', function () {
         if (window.MarketIn) {
-            const cartItems = [];
-            {% for item in checkout.line_items %}
-            cartItems.push({
-                productId: '{{ item.product_id }}',
-                price: {{ item.price | money_without_currency | replace: ',', '' }},
-                quantity: {{ item.quantity }}
-            });
-            {% endfor %}
-
             window.MarketIn.trackConversion({
                 eventType: 'purchase',
+                value: {{ checkout.total_price | money_without_currency | replace: ',', '' }},
                 currency: '{{ checkout.currency }}',
-                cartItems: cartItems,
+                productId: '{{ checkout.line_items | map: "product_id" | join: "-" }}',
                 conversionRef: 'order-{{ checkout.order_number }}'
             });
         }
@@ -237,18 +220,11 @@ document.addEventListener('DOMContentLoaded', function () {
 @push('scripts')
 <script>
     if (window.MarketIn) {
-        const cartItems = @json($order->lineItems->map(function ($item) {
-            return [
-                'productId' => $item->sku,
-                'price' => $item->price,
-                'quantity' => $item->quantity
-            ];
-        }));
-
         window.MarketIn.trackConversion({
             eventType: 'purchase',
+            value: @json($order->total),
             currency: @json($order->currency),
-            cartItems: cartItems,
+            productId: @json($order->lineItems->pluck('sku')->implode('-')),
             conversionRef: @json('order-' . $order->id),
             metadata: @json(['customerEmail' => $order->customer_email])
         });
@@ -276,32 +252,6 @@ MarketIn.trackConversion({
     value: 99.99,
     currency: 'USD',
     productId: 'product-123'
-});
-
-// Track a multi-item order
-MarketIn.trackConversion({
-    eventType: 'purchase',
-    currency: 'USD',
-    cartItems: [
-        { productId: 'item-1', price: 49.99, quantity: 1 },
-        { productId: 'item-2', price: 24.99, quantity: 2 }
-    ],
-    conversionRef: 'order-456'
-});
-
-// Track with discounts and taxes
-MarketIn.trackConversion({
-    eventType: 'purchase',
-    currency: 'USD',
-    cartItems: [
-        { productId: 'sku-1', price: 29.99, quantity: 1 },
-        { productId: 'sku-2', price: 15.50, quantity: 2 }
-    ],
-    metadata: {
-        discounts: [{ type: 'percentage', amount: 10 }],  // 10% off
-        taxes: [{ type: 'percentage', amount: 8.25 }]     // 8.25% tax
-    },
-    conversionRef: 'order-789'
 });
 ```
 
@@ -348,7 +298,7 @@ MarketIn.trackAffiliateClick({
 })
 ```
 
-Tracks initial affiliate clicks for attribution. Automatically called when URL contains affiliate parameters (`aid`, `cid`). Persists referral data in hybrid storage for cross-session attribution.
+Tracks initial affiliate clicks for attribution. Automatically called when URL contains affiliate parameters (`aid`, `cid`).
 
 ### Conversion Tracking
 
@@ -359,10 +309,6 @@ MarketIn.trackConversion({
     currency: 'USD',
     productId: 'product-123',
     conversionRef: 'order-456', // optional, for deduplication
-    cartItems: [ // optional, for multi-item orders
-        { productId: 'item-1', price: 49.99, quantity: 1 },
-        { productId: 'item-2', price: 24.99, quantity: 2 }
-    ],
     metadata: { // optional
         orderId: 'order-456',
         customerType: 'returning'
@@ -370,44 +316,13 @@ MarketIn.trackConversion({
 })
 ```
 
-When `cartItems` is provided, the total `value` is automatically calculated from the items. If `value` is also provided, `cartItems` takes precedence.
-
-**Parameters:**
-- `eventType` (required): Type of conversion event
-- `value` (optional): Conversion value (ignored when `cartItems` is provided)
-- `currency` (optional): Currency code (default: 'USD')
-- `productId` (optional): Product identifier (required for non-subscription events unless `cartItems` provided)
-- `conversionRef` (optional): Unique reference for deduplication
-- `cartItems` (optional): Array of cart items for multi-item orders
-- `metadata` (optional): Additional custom data, supports `discounts` and `taxes` arrays
-
-**Cart Items Format:**
-Each cart item can include:
-- `productId` (required): Product identifier
-- `price` (required): Item price
-- `quantity` (optional): Quantity purchased (default: 1)
-- `affiliateId`, `campaignId` (optional): Override attribution for this item
-
-**Metadata Enhancements:**
-When `metadata.discounts` or `metadata.taxes` are provided, the backend computes an `effective_value` by applying discounts/taxes to the cart total. Rewards are based on the effective attributed value.
-
-```javascript
-metadata: {
-    discounts: [{ type: 'percentage', amount: 10 }],  // 10% off
-    taxes: [{ type: 'percentage', amount: 8.25 }]     // 8.25% tax
-}
-```
-
-**Behavior & Deduplication:**
-- Requires `campaignId` and `affiliateId` to be configured; otherwise conversion is skipped
-- Client-side deduplication prevents duplicate conversions using `conversionRef`
-- When `cartItems` is provided, the SDK automatically computes the conversion value from items
-- In `trackConversion`, missing `affiliateId`/`campaignId` in `cartItems` are auto-attached from stored referral data
-- Sends to authenticated `log-conversion` endpoint if `token` provided, otherwise uses public proxy
-- API responses expose cart items as `cart_items` (snake_case)
-
-**Reward Amount Calculation:**
-Rewards are computed in this order: `campaign.fixed_commission_amount` > `campaign.commission_percent` > `brand.commission_percent` > `0`. Monetary math uses Decimal precision on the server.
+**Event Types:**
+- `purchase` - Product purchase
+- `subscription_created` - New subscription
+- `subscription_renewed` - Subscription renewal
+- `lead` - Lead generation
+- `signup` - User registration
+- Custom event types supported
 
 ### Subscription Tracking
 
@@ -424,17 +339,27 @@ MarketIn.trackConversion({
 })
 ```
 
-For subscription lifecycle events (`subscription_created`, `subscription_renewal`, `subscription_canceled`), `productId` may be omitted. Fields like `subscriptionId`, `periodNumber`, `planId`, `interval`, and `recurringAmount` are recorded in conversion metadata when provided.
+### Tracking Purchases and Subscriptions
 
-### Page Data Crawling
+MarketIn provides built-in helpers so you don’t need to wire anything manually:
 
-**Event Types:**
-- `purchase` - Product purchase
-- `subscription_created` - New subscription
-- `subscription_renewed` - Subscription renewal
-- `lead` - Lead generation
-- `signup` - User registration
-- Custom event types supported
+```javascript
+// Purchase helper
+MarketIn.handleTrackConversion({
+    productId: 'sku-123',
+    value: 99.99,
+    currency: 'NGN'
+});
+
+// Subscription helper
+MarketIn.handleSubscriptionSubmit({
+    eventType: 'subscription_started',
+    recurringAmount: 500,
+    currency: 'NGN'
+});
+```
+
+Both helpers delegate to `MarketIn.trackConversion()` — make sure your integration has already established `campaignId` and `affiliateId` (via URL parameters or by passing them during `MarketIn.init`) so conversions can be attributed correctly.
 
 ### Page Data Crawling
 
@@ -478,47 +403,7 @@ The SDK automatically recognizes these URL parameters:
 const status = MarketIn.getStatus();
 console.log(status.version); // "1.0.1"
 console.log(status.initialized); // true/false
-
-// Referral storage utilities (advanced use)
-MarketIn.saveReferralParams({ affiliateId: '123', campaignId: '456', productId: '789' });
-const referral = MarketIn.getReferralParams(); // { affiliateId: '123', campaignId: '456', ... }
-MarketIn.clearReferralParams();
 ```
-
-## Referral Storage (Hybrid Cookie + localStorage)
-
-The SDK uses a hybrid storage approach to persist referral data (`affiliateId`, `campaignId`, `productId`) for attribution across sessions, tabs, and delayed conversions:
-
-- **Primary Storage**: Cookies (30-day expiry, `SameSite=Lax`, `Secure` on HTTPS) — survives browser restarts and works across tabs.
-- **Fallback Storage**: localStorage — provides redundancy and works in environments where cookies are restricted.
-- **Sync Mechanism**: On SDK initialization, the SDK syncs cookie and localStorage to ensure consistency.
-
-### Benefits
-- **Privacy-Safe**: Uses `SameSite=Lax` cookies to prevent CSRF while allowing top-level navigation.
-- **Resilient**: Falls back to localStorage if cookies are blocked (e.g., by browser settings or extensions).
-- **Cross-Tab**: Cookies ensure attribution persists across multiple tabs or windows.
-- **Delayed Conversions**: Referral data survives page reloads, browser restarts, and even short-term offline periods.
-
-### Automatic Behavior
-- Referral data is saved when `trackAffiliateClick` is called (e.g., from URL params on landing).
-- In `trackConversion`, missing `affiliateId`/`campaignId` in `cartItems` are auto-attached from stored referral data.
-- Storage is synced on `MarketIn.init()` to handle edge cases.
-
-### Manual Control (Advanced)
-If you need to manually manage referral data (e.g., for custom integrations):
-
-```javascript
-// Save custom referral params
-MarketIn.saveReferralParams({ affiliateId: '123', campaignId: '456', productId: '789' });
-
-// Get current referral data
-const referral = MarketIn.getReferralParams(); // { affiliateId: '123', campaignId: '456', ... }
-
-// Clear referral data (e.g., on logout)
-MarketIn.clearReferralParams();
-```
-
-This hybrid approach ensures reliable attribution for e-commerce checkouts, even in complex user journeys involving multiple sessions or devices.
 
 ## Configuration
 
@@ -546,15 +431,6 @@ MarketIn.init({
 });
 ```
 
-## Best Practices
-
-- Initialize early so session and affiliate detection run before redirects or conversions
-- Track page views on every page load; for SPAs, call `trackPageView()` on route changes
-- If your site is an SPA or uses redirects that strip query params, ensure the SDK loads before URL params are removed
-- Prefer server-generated `conversionRef` (order ID) for strong idempotency
-- Use HTTPS in production for secure cookies
-- Keep `debug: false` in production
-
 ## Browser Support
 
 - Chrome 60+
@@ -577,14 +453,6 @@ The SDK includes comprehensive error handling:
 - Failed API requests are logged but don't throw errors
 - Invalid parameters are validated with helpful warnings
 - Network failures are handled gracefully
-
-## Security & Deployment
-
-- **CORS**: Server must allow your site origin and `Content-Type: application/json`
-- **Tokens**: Provide `token` to `init()` for authenticated conversion endpoint
-- **Cookies**: `mi_click` uses `SameSite=Lax` and `Secure` on HTTPS
-- **Rate Limiting**: Implement rate limiting on API endpoints
-- **Data Validation**: Validate all data server-side
 
 ## Development
 
@@ -616,9 +484,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - Affiliate link support
 - Conversion tracking
 - Page view analytics
-- Multi-item cart support with `cartItems` parameter
-- Metadata enhancements for discounts and taxes
-- Improved conversion attribution and reward calculation
 
 ## Support
 

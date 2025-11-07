@@ -1,0 +1,41 @@
+{
+  "name": "marketin-sdk",
+  "version": "1.0.1",
+  "description": "A JavaScript SDK for tracking website activities and affiliate links",
+  "main": "marketin-sdk.js",
+  "jsdelivr": "marketin-sdk.min.js",
+  "files": [
+    "marketin-sdk.js",
+    "marketin-sdk.min.js",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "terser marketin-sdk.js -o marketin-sdk.min.js --compress --mangle",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MarketIN-Inc/marketin-sdk.git"
+  },
+  "keywords": [
+    "affiliate",
+    "tracking",
+    "analytics",
+    "marketing",
+    "conversion",
+    "sdk",
+    "javascript"
+  ],
+  "author": "Your Name <gilbertayoku3@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/MarketIN-Inc/marketin-sdk/issues"
+  },
+  "homepage": "https://github.com/MarketIN-Inc/marketin-sdk#readme",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "devDependencies": {
+    "terser": "^5.44.1"
+  }
+}
