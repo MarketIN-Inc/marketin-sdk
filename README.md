@@ -45,34 +45,59 @@ Download `marketin-sdk.min.js` and host it on your server:
 ## CMS Theme Integration
 
 ### WordPress
-- **Create or select a child theme:** Avoid editing parent themes directly so updates do not overwrite the integration. If you do not already have a child theme, generate one (e.g., via `wp scaffold child-theme` or manual `style.css` + `functions.php`). Activate it in `Appearance > Themes`.
-- **Host the SDK:** Use the jsDelivr CDN or self-host `marketin-sdk.min.js` inside the child theme (e.g., `wp-content/themes/your-child/js/marketin-sdk.min.js`).
-- **Enqueue the script:** Add the following to the child theme `functions.php` so the SDK loads on the frontend. Replace the CDN URL if self-hosting.
+
+**Recommended:** Install the official **MarketIn Integration** plugin for the easiest setup and automatic WooCommerce integration.
+
+1. **Install the Plugin:**
+   - Download from [WordPress Plugin Directory](https://wordpress.org/plugins/marketin/) or upload the plugin ZIP file
+   - Activate it in your WordPress dashboard under **Plugins**
+
+2. **Configure Settings:**
+   - Navigate to **Settings → MarketIn**
+   - Enter your **Brand ID** (found in MarketIn app under **Brand → Brands**)
+   - Set **API Endpoint** to `https://api.marketin.now/api/v1/` (unless your team provided a different environment)
+   - Add your **Private API Key** (from the "API Keys" section in MarketIn app)
+   - Click **Save Changes** and **Test Connection**
+
+3. **WooCommerce Integration (Automatic):**
+   - If WooCommerce is installed, the plugin automatically tracks conversions on the thank-you page
+   - Use **Sync All Products Now** to push your catalog into MarketIn
+   - The plugin handles advocate parameter preservation and conversion attribution
+
+4. **Verify Setup:**
+   - Load a public page and check DevTools Console for `[MarketIn SDK] SDK initialized`
+   - Check Network tab for requests to `marketin.now`
+   - Run a test order to confirm conversions are captured
+
+**Manual Integration (Alternative):**
+If you prefer manual integration or need custom functionality, you can integrate the SDK directly:
+
+- **Create or select a child theme** to avoid overwriting parent theme updates
+- **Enqueue the script** in your theme's `functions.php`:
 
 ```php
 function marketin_enqueue_sdk() {
-        if (is_admin()) {
-                return;
-        }
+    if (is_admin()) {
+        return;
+    }
 
-        wp_enqueue_script(
-                'marketin-sdk',
-                'https://cdn.jsdelivr.net/gh/MarketIN-Inc/marketin-sdk@latest/marketin-sdk.min.js',
-                array(),
-                null,
-                true
-        );
+    wp_enqueue_script(
+        'marketin-sdk',
+        'https://cdn.jsdelivr.net/gh/MarketIN-Inc/marketin-sdk@latest/marketin-sdk.min.js',
+        array(),
+        null,
+        true
+    );
 
-        wp_add_inline_script(
-                'marketin-sdk',
-                'window.addEventListener("DOMContentLoaded", function() { MarketIn.init({ brandId: "YOUR_BRAND_ID", debug: false }); });'
-        );
+    wp_add_inline_script(
+        'marketin-sdk',
+        'window.addEventListener("DOMContentLoaded", function() { MarketIn.init({ brandId: "YOUR_BRAND_ID", debug: false }); });'
+    );
 }
 add_action('wp_enqueue_scripts', 'marketin_enqueue_sdk');
 ```
 
-- **Localize dynamic data (optional):** Use `wp_localize_script` or `wp_add_inline_script` to pass per-page campaign data when available from WordPress.
-- **Capture conversions:** Hook into commerce plugins (e.g., WooCommerce `woocommerce_thankyou` action) or form submissions and call `MarketIn.trackConversion`. Example for WooCommerce:
+- **Capture conversions** by hooking into WooCommerce events in `functions.php`:
 
 ```php
 add_action('woocommerce_thankyou', function ($order_id) {
@@ -85,7 +110,7 @@ add_action('woocommerce_thankyou', function ($order_id) {
     foreach ($order->get_items() as $item_id => $item) {
         $product = $item->get_product();
         $cartItems[] = array(
-            'productId' => $product->get_id(),
+            'productId' => $item->get_id(),
             'price' => (float) $item->get_total(),
             'quantity' => $item->get_quantity()
         );
@@ -107,7 +132,6 @@ add_action('woocommerce_thankyou', function ($order_id) {
 ```
 
 - **Subscriptions:** For plugins like WooCommerce Subscriptions or MemberPress, listen for renewal hooks and send `eventType` values such as `subscription_created` or `subscription_renewed` with the relevant plan metadata.
-- **Verify:** Load a public page, open DevTools console, ensure `[MarketIn SDK] SDK initialized` appears. Confirm outbound requests to `log-activity` succeed.
 
 ### Shopify (Liquid)
 - **Upload the script:** In `Online Store > Themes > Edit code`, add `marketin-sdk.min.js` to `assets/`. Alternatively use the CDN URL.
