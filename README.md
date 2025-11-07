@@ -49,7 +49,7 @@ Download `marketin-sdk.min.js` and host it on your server:
 **Recommended:** Install the official **MarketIn Integration** plugin for the easiest setup and automatic WooCommerce integration.
 
 1. **Install the Plugin:**
-   - Download from [WordPress Plugin Directory](https://wordpress.org/plugins/marketin/) or upload the plugin ZIP file
+   - Upload the plugin ZIP file
    - Activate it in your WordPress dashboard under **Plugins**
 
 2. **Configure Settings:**
