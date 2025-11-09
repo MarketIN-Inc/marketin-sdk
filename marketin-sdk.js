@@ -161,6 +161,21 @@
             // Sync referral storage for consistency
             utils.syncReferralStorage();
 
+            // Hydrate config from any stored referral context (covers thank-you pages without query params)
+            const storedReferral = utils.getReferralParams();
+            if (storedReferral.affiliateId && !config.affiliateId) {
+                config.affiliateId = storedReferral.affiliateId;
+            }
+            if (storedReferral.campaignId && !config.campaignId) {
+                config.campaignId = storedReferral.campaignId;
+            }
+            if (storedReferral.productId && !config.productId) {
+                config.productId = storedReferral.productId;
+            }
+            if (storedReferral.clickId && !config.clickId) {
+                config.clickId = storedReferral.clickId;
+            }
+
             // Check for affiliate + campaign + product IDs in URL
             // New short params (preferred): aid, cid, pid
             // Legacy long params still supported: affiliate_id, campaign_id, product_id
@@ -364,8 +379,26 @@
         },
 
         // Track a conversion event and attribute to affiliate via tracking IDs
-        trackConversion: ({ eventType, value, currency = 'USD', conversionRef, productId, cartItems, metadata = {}, subscriptionId, periodNumber, planId, interval, recurringAmount, subscriptionStatus } = {}) => {
+        trackConversion: ({ eventType, value, currency = 'USD', conversionRef, productId, cartItems, metadata = {}, subscriptionId, periodNumber, planId, interval, recurringAmount, subscriptionStatus, affiliateId: overrideAffiliateId, campaignId: overrideCampaignId } = {}) => {
             try {
+                // Allow explicit overrides coming from payloads (e.g., WooCommerce thank-you pages)
+                if (overrideAffiliateId && !config.affiliateId) {
+                    config.affiliateId = overrideAffiliateId;
+                }
+                if (overrideCampaignId && !config.campaignId) {
+                    config.campaignId = overrideCampaignId;
+                }
+
+                if (!config.affiliateId || !config.campaignId) {
+                    const fallbackReferral = utils.getReferralParams();
+                    if (fallbackReferral.affiliateId && !config.affiliateId) {
+                        config.affiliateId = fallbackReferral.affiliateId;
+                    }
+                    if (fallbackReferral.campaignId && !config.campaignId) {
+                        config.campaignId = fallbackReferral.campaignId;
+                    }
+                }
+
                 if (!config.campaignId || !config.affiliateId) {
                     utils.log('Conversion skipped: missing campaignId or affiliateId');
                     return;
