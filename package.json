@@ -1,6 +1,6 @@
 {
   "name": "marketin-sdk",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A JavaScript SDK for tracking website activities and affiliate links",
   "main": "marketin-sdk.js",
   "jsdelivr": "marketin-sdk.min.js",
