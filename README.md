@@ -42,249 +42,6 @@ Download `marketin-sdk.min.js` and host it on your server:
 <script src="/path/to/marketin-sdk.min.js"></script>
 ```
 
-## CMS Theme Integration
-
-### WordPress
-
-**Recommended:** Install the official **MarketIn Integration** plugin for the easiest setup and automatic WooCommerce integration.
-
-1. **Install the Plugin:**
-   - Upload the plugin ZIP file
-   - Activate it in your WordPress dashboard under **Plugins**
-
-2. **Configure Settings:**
-   - Navigate to **Settings → MarketIn**
-   - Enter your **Brand ID** (found in MarketIn app under **Brand → Brands**)
-   - Set **API Endpoint** to `https://api.marketin.now/api/v1/` (unless your team provided a different environment)
-   - Add your **Private API Key** (from the "API Keys" section in MarketIn app)
-   - Click **Save Changes** and **Test Connection**
-
-3. **WooCommerce Integration (Automatic):**
-   - If WooCommerce is installed, the plugin automatically tracks conversions on the thank-you page
-   - Use **Sync All Products Now** to push your catalog into MarketIn
-   - The plugin handles advocate parameter preservation and conversion attribution
-
-4. **Verify Setup:**
-   - Load a public page and check DevTools Console for `[MarketIn SDK] SDK initialized`
-   - Check Network tab for requests to `marketin.now`
-   - Run a test order to confirm conversions are captured
-
-**Manual Integration (Alternative):**
-If you prefer manual integration or need custom functionality, you can integrate the SDK directly:
-
-- **Create or select a child theme** to avoid overwriting parent theme updates
-- **Enqueue the script** in your theme's `functions.php`:
-
-```php
-function marketin_enqueue_sdk() {
-    if (is_admin()) {
-        return;
-    }
-
-    wp_enqueue_script(
-        'marketin-sdk',
-        'https://cdn.jsdelivr.net/gh/MarketIN-Inc/marketin-sdk@latest/marketin-sdk.min.js',
-        array(),
-        null,
-        true
-    );
-
-    wp_add_inline_script(
-        'marketin-sdk',
-        'window.addEventListener("DOMContentLoaded", function() { MarketIn.init({ brandId: "YOUR_BRAND_ID", debug: false }); });'
-    );
-}
-add_action('wp_enqueue_scripts', 'marketin_enqueue_sdk');
-```
-
-- **Capture conversions** by hooking into WooCommerce events in `functions.php`:
-
-```php
-add_action('woocommerce_thankyou', function ($order_id) {
-    $order = wc_get_order($order_id);
-    if (!$order) {
-        return;
-    }
-
-    $cartItems = array();
-    foreach ($order->get_items() as $item_id => $item) {
-        $product = $item->get_product();
-        $cartItems[] = array(
-            'productId' => $item->get_id(),
-            'price' => (float) $item->get_total(),
-            'quantity' => $item->get_quantity()
-        );
-    }
-
-    $payload = array(
-        'eventType' => 'purchase',
-        'currency' => $order->get_currency(),
-        'cartItems' => $cartItems,
-        'conversionRef' => 'order-' . $order_id,
-        'metadata' => array(
-            'orderId' => $order_id,
-            'customerEmail' => $order->get_billing_email()
-        )
-    );
-
-    wp_add_inline_script('marketin-sdk', 'MarketIn.trackConversion(' . wp_json_encode($payload) . ');');
-});
-```
-
-- **Subscriptions:** For plugins like WooCommerce Subscriptions or MemberPress, listen for renewal hooks and send `eventType` values such as `subscription_created` or `subscription_renewed` with the relevant plan metadata.
-
-### Shopify (Liquid)
-- **Upload the script:** In `Online Store > Themes > Edit code`, add `marketin-sdk.min.js` to `assets/`. Alternatively use the CDN URL.
-- **Include globally:** Edit `layout/theme.liquid` and insert the script before `</body>` (or use `{{ 'marketin-sdk.min.js' | asset_url | script_tag }}` when self-hosted).
-- **Initialize:** Immediately after the script include, add an inline snippet:
-
-```liquid
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    if (window.MarketIn) {
-        window.MarketIn.init({
-            brandId: '{{ shop.id }}',
-            debug: {{ shop.metafields.marketin.debug | default: false | json }}
-        });
-    }
-});
-</script>
-```
-
-- **Dynamic data:** Use Liquid variables (`customer.id`, `cart.items`, `page_title`) to enrich `MarketIn.trackConversion` calls in templates like `checkout.liquid` or `order-status.liquid`.
-- **Capture conversions:** In `checkout.liquid` (for Shopify Plus) or the order status page scripts, invoke `MarketIn.trackConversion` with order totals and IDs:
-
-```liquid
-{% if first_time_accessed %}
-    <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        if (window.MarketIn) {
-            const cartItems = [];
-            {% for item in checkout.line_items %}
-            cartItems.push({
-                productId: '{{ item.product_id }}',
-                price: {{ item.price | money_without_currency | replace: ',', '' }},
-                quantity: {{ item.quantity }}
-            });
-            {% endfor %}
-
-            window.MarketIn.trackConversion({
-                eventType: 'purchase',
-                currency: '{{ checkout.currency }}',
-                cartItems: cartItems,
-                conversionRef: 'order-{{ checkout.order_number }}'
-            });
-        }
-    });
-    </script>
-{% endif %}
-```
-
-- **Subscriptions:** If using apps that expose subscription data (e.g., Recharge), subscribe to their JS callbacks/webhooks and forward events via `MarketIn.trackConversion` with `eventType` set to `subscription_created`, `subscription_renewed`, etc.
-- **Test:** Preview the theme, perform a cart action, and verify requests fire in the network tab.
-
-### Webflow
-- **Add the script globally:** In Webflow Designer go to `Project Settings > Custom Code > Footer Code`, paste the CDN script tag and an initialization snippet:
-
-```html
-    <script src="https://cdn.jsdelivr.net/gh/MarketIN-Inc/marketin-sdk@latest/marketin-sdk.min.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        MarketIn.init({ brandId: 'your-brand-id', debug: false });
-    });
-</script>
-```
-
-- **Per-page overrides:** For campaign-specific landing pages, override `brandId` or add `campaignId` in the page-level `Custom Code > Before </body>` settings.
-- **Product data:** Use custom attributes (e.g., `data-marketin-product`) within Webflow elements to power `MarketIn.crawlPageData()` if you enable crawling.
-- **Capture conversions:** Use Webflow’s form success callbacks or ecommerce `Order Confirmation` page custom code to call `MarketIn.trackConversion`. Example form submission snippet:
-
-```html
-<script>
-    document.addEventListener('w-form-done', function (event) {
-        if (window.MarketIn) {
-            window.MarketIn.trackConversion({
-                eventType: 'lead',
-                currency: 'USD',
-                value: 0,
-                conversionRef: 'form-' + Date.now(),
-                metadata: { formId: event.target.id }
-            });
-        }
-    });
-</script>
-```
-
-- **Subscriptions:** For Webflow Ecommerce, add code on the order confirmation page to send subscription-related events when applicable, populating `subscriptionId`, `planId`, and `recurringAmount` fields.
-- **Publish and verify:** Publish the site, open the live domain, and confirm the SDK loads and logs page views.
-
-### Other CMS Platforms
-- **Generic include:** Most CMS systems (Drupal, Joomla, Ghost) let you edit theme templates or inject footer scripts. Insert the CDN `<script>` tag in the global layout and call `MarketIn.init({ brandId: 'your-brand-id' });` on DOM ready.
-- **Module/plugin approach:** If the CMS supports script injection plugins/modules, configure one to load the script after page render. Prefer footer placement to avoid blocking rendering.
-- **Configuration management:** Store `brandId`, `campaignId`, and `apiEndpoint` in CMS configuration screens or environment variables so non-technical users can update without code edits.
-- **Capture conversions:** Identify the CMS event hooks (e.g., Drupal Commerce checkout completion, Joomla VirtueMart orders) and trigger `MarketIn.trackConversion` with order totals and references. For recurring billing modules, send `subscription_*` events with plan metadata.
-- **QA:** Use staging environments to confirm that CDN delivery works and that CSP headers allow external scripts (`script-src` should include the CDN domain or use a hash/nonce).
-
-## Laravel Integration
-- **Load the SDK:** In your main Blade layout (`resources/views/layouts/app.blade.php` or similar) add the CDN script after your compiled assets. If you prefer self-hosting, expose `marketin-sdk.min.js` via Laravel Mix/Vite and reference the built asset path.
-
-```blade
-<!-- resources/views/layouts/app.blade.php -->
-<!doctype html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-<head>
-    @vite(['resources/js/app.js'])
-</head>
-<body>
-    @yield('content')
-
-    <script src="https://cdn.jsdelivr.net/gh/MarketIN-Inc/marketin-sdk@latest/marketin-sdk.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            if (window.MarketIn) {
-                window.MarketIn.init({
-                    brandId: @json(config('services.marketin.brand_id')),
-                    campaignId: @json(session('campaign_id')),
-                    debug: @json(config('app.debug'))
-                });
-            }
-        });
-    </script>
-</body>
-</html>
-```
-
-- **Share dynamic data:** Populate `brandId`, campaign identifiers, or tokens from `config/services.php`, environment variables, or middleware that captures affiliate parameters and stores them in the session. Use Blade `@php` blocks or `@json()` helpers to serialize PHP arrays into the inline script safely.
-- **Handle conversions:** Invoke `MarketIn.trackConversion` once an order or subscription is confirmed. For example, hook into your controller after payment success:
-
-```blade
-@push('scripts')
-<script>
-    if (window.MarketIn) {
-        const cartItems = @json($order->lineItems->map(function ($item) {
-            return [
-                'productId' => $item->sku,
-                'price' => $item->price,
-                'quantity' => $item->quantity
-            ];
-        }));
-
-        window.MarketIn.trackConversion({
-            eventType: 'purchase',
-            currency: @json($order->currency),
-            cartItems: cartItems,
-            conversionRef: @json('order-' . $order->id),
-            metadata: @json(['customerEmail' => $order->customer_email])
-        });
-    }
-</script>
-@endpush
-```
-
-- **Livewire and Inertia:** For Livewire components, dispatch a browser event (`$this->dispatchBrowserEvent('marketin:conversion', [...])`) and listen in JavaScript to call the SDK. With Inertia or SPA routes, re-run `MarketIn.trackPageView()` on navigation changes to ensure single-page transitions are recorded.
-- **Subscriptions:** When using Laravel Cashier or Spark, subscribe to billing events (e.g., `InvoicePaymentSucceeded`) and pass subscription IDs, plan IDs, and amounts through `MarketIn.trackConversion` with `eventType` values like `subscription_created` or `subscription_renewed`.
-- **Security considerations:** If you enforce Content Security Policy headers, whitelist the CDN domain or self-host the script. Confirm `script-src` allows the inline initialization snippet (`'unsafe-inline'`, hash, or nonce).
-
 ## Quick Start
 
 ```javascript
@@ -569,6 +326,24 @@ MarketIn.init({
     debug: true
 });
 ```
+
+## CMS Theme Integration
+
+### WordPress
+
+Install the official **MarketIn Integration** plugin and let it handle the SDK injection and WooCommerce conversion tracking for you.
+
+1. Upload or install the plugin, then activate it in your WordPress dashboard.
+2. Navigate to **Settings → MarketIn**. You will see inputs for **Brand ID**, **API Endpoint**, and **Private API Key**.
+3. Copy your **Brand ID** from the MarketIn app under **Brand → Brands**; each brand card displays **BRAND ID: &lt;number&gt;** beneath the brand name.
+4. Leave the **API Endpoint** as `https://api.marketin.now/api/v1/` unless your team provided a different environment.
+5. Navigate to https://app.marketin.now/brand/api-docs, click "Generate API Key" to create a new private key, then copy it.
+6. Save changes, click **Test Connection**, and wait for the success message.
+7. If WooCommerce is installed, use the **Sync All Products Now** button to push your catalog into MarketIn.
+
+After the plugin is configured, it automatically injects the SDK on every page, preserves advocate parameters, and fires conversion events on the WooCommerce thank-you page.
+
+Check DevTools → Network for `marketin.now` requests or run a test order to confirm conversions are being captured.
 
 ## Best Practices
 
