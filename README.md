@@ -25,7 +25,7 @@ A lightweight JavaScript SDK for tracking website activities, affiliate links, a
 <script src="https://cdn.jsdelivr.net/gh/MarketIN-Inc/marketin-sdk@latest/marketin-sdk.min.js"></script>
 
 <!-- Specific version -->
-<script src="https://cdn.jsdelivr.net/gh/MarketIN-Inc/marketin-sdk@1.0.1/marketin-sdk.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/MarketIN-Inc/marketin-sdk@1.0.2/marketin-sdk.min.js"></script>
 ```
 
 ### Via NPM
@@ -633,6 +633,12 @@ cd marketin-sdk
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Changelog
+
+### 1.0.2
+- Enhanced referral parameter handling for improved tracking
+- Fixed conversion attribution on thank-you pages without URL params
+- Added fallback to stored referral data in trackConversion
+- Improved error handling for missing affiliate/campaign IDs
 
 ### 1.0.1
 - Initial release
